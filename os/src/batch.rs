@@ -104,10 +104,16 @@ lazy_static! {
         UPSafeCell::new({
             extern "C" {
                 fn _num_app();
+                #[allow(dead_code)]
+                fn app_6_end();
             }
             let num_app_ptr = _num_app as usize as *const usize;
+            #[allow(unused_variables)]
+            let app_6_end_ptr = app_6_end as usize as *const usize;
             let num_app = num_app_ptr.read_volatile();
             let mut app_start: [usize; MAX_APP_NUM + 1] = [0; MAX_APP_NUM + 1];
+            // actual app_start addrress are fllowing the num_app_ptr, hence ,add 1
+            // last one is app_6_end 
             let app_start_raw: &[usize] =
                 core::slice::from_raw_parts(num_app_ptr.add(1), num_app + 1);
             app_start[..=num_app].copy_from_slice(app_start_raw);
@@ -145,10 +151,10 @@ pub fn run_next_app() -> ! {
         fn __restore(cx_addr: usize);
     }
     unsafe {
-        __restore(KERNEL_STACK.push_context(TrapContext::app_init_context(
-            APP_BASE_ADDRESS,
-            USER_STACK.get_sp(),
-        )) as *const _ as usize);
+        let cx = TrapContext::app_init_context(APP_BASE_ADDRESS, USER_STACK.get_sp());
+        let cx_addr: &'static mut TrapContext = KERNEL_STACK.push_context(cx);
+
+        __restore(cx_addr as *const _ as usize);
     }
     panic!("Unreachable in batch::run_current_app!");
 }

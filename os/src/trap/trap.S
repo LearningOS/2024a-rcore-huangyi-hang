@@ -40,15 +40,17 @@ __alltraps:
 __restore:
     # case1: start running app by __restore
     # case2: back to U after handling trap
+    # a0: cx in kernel stack 
+    # sp: within boot_stack
     mv sp, a0
-    # now sp->kernel stack(after allocated), sscratch->user stack
+    # now sp->kernel stack(after allocated), sscratch->0
     # restore sstatus/sepc
-    ld t0, 32*8(sp)
-    ld t1, 33*8(sp)
-    ld t2, 2*8(sp)
+    ld t0, 32*8(sp) # sstatus
+    ld t1, 33*8(sp) # sepc
+    ld t2, 2*8(sp) # sp of context, which is USER_STACK
     csrw sstatus, t0
     csrw sepc, t1
-    csrw sscratch, t2
+    csrw sscratch, t2 # now, sscratch = user stack
     # restore general-purpuse registers except sp/tp
     ld x1, 1*8(sp)
     ld x3, 3*8(sp)
@@ -58,7 +60,8 @@ __restore:
         .set n, n+1
     .endr
     # release TrapContext on kernel stack
-    addi sp, sp, 34*8
-    # now sp->kernel stack, sscratch->user stack
+    addi sp, sp, 34*8 # can not remove it, through it still works after removing
+    # now sp->kernel stack from a0, sscratch->user stack from cx
     csrrw sp, sscratch, sp
+    # now sp->user stack, sscratch->kernel stack
     sret
