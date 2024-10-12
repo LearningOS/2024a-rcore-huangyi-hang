@@ -1,0 +1,5 @@
+define hook-quit 
+    kill
+end
+set arch riscv:rv64 
+target remote localhost:1234
