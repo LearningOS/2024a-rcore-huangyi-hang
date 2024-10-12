@@ -14,7 +14,7 @@ mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 
-use crate::config::MAX_APP_NUM;
+use crate::config::{MAX_APP_NUM, MAX_SYSCALL_NUM};
 use crate::loader::{get_num_app, init_app_cx};
 use crate::sync::UPSafeCell;
 use lazy_static::*;
@@ -22,6 +22,7 @@ use switch::__switch;
 pub use task::{TaskControlBlock, TaskStatus};
 
 pub use context::TaskContext;
+use crate::syscall::process::TaskInfo;
 
 /// The task manager, where all the tasks are managed.
 ///
@@ -43,6 +44,7 @@ pub struct TaskManager {
 pub struct TaskManagerInner {
     /// task list
     tasks: [TaskControlBlock; MAX_APP_NUM],
+    task_infos: [TaskInfo; MAX_APP_NUM],
     /// id of current `Running` task
     current_task: usize,
 }
@@ -59,11 +61,17 @@ lazy_static! {
             task.task_cx = TaskContext::goto_restore(init_app_cx(i));
             task.task_status = TaskStatus::Ready;
         }
+        let task_infos = [TaskInfo {
+            status: TaskStatus::Ready,
+            syscall_times: [0; MAX_SYSCALL_NUM],
+            time: 0,
+        }; MAX_APP_NUM];
         TaskManager {
             num_app,
             inner: unsafe {
                 UPSafeCell::new(TaskManagerInner {
                     tasks,
+                    task_infos,
                     current_task: 0,
                 })
             },
@@ -135,6 +143,19 @@ impl TaskManager {
             panic!("All applications completed!");
         }
     }
+
+    fn increase_syscall(&self, syscall_id: usize) {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.task_infos[current].syscall_times[syscall_id] += 1;
+    }
+    fn current_task_info(&self) ->TaskInfo {
+        let inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        let ti = inner.task_infos[current].clone();
+        ti
+    }
+
 }
 
 /// Run the first task in task list.
@@ -168,4 +189,13 @@ pub fn suspend_current_and_run_next() {
 pub fn exit_current_and_run_next() {
     mark_current_exited();
     run_next_task();
+}
+
+/// Increase syscall 
+pub fn increase_syscall(syscall_id: usize) {
+    TASK_MANAGER.increase_syscall(syscall_id);
+}
+/// Return current task info
+pub fn current_task_info() -> TaskInfo{
+    TASK_MANAGER.current_task_info()
 }
