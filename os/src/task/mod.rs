@@ -14,7 +14,7 @@ mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 
-use crate::config::{MAX_APP_NUM, MAX_SYSCALL_NUM};
+use crate::config::MAX_APP_NUM;
 use crate::loader::{get_num_app, init_app_cx};
 use crate::sync::UPSafeCell;
 use lazy_static::*;
@@ -44,7 +44,6 @@ pub struct TaskManager {
 pub struct TaskManagerInner {
     /// task list
     tasks: [TaskControlBlock; MAX_APP_NUM],
-    task_infos: [TaskInfo; MAX_APP_NUM],
     /// id of current `Running` task
     current_task: usize,
 }
@@ -55,23 +54,18 @@ lazy_static! {
         let num_app = get_num_app();
         let mut tasks = [TaskControlBlock {
             task_cx: TaskContext::zero_init(),
+            task_infos: TaskInfo::new(),
             task_status: TaskStatus::UnInit,
         }; MAX_APP_NUM];
         for (i, task) in tasks.iter_mut().enumerate() {
             task.task_cx = TaskContext::goto_restore(init_app_cx(i));
             task.task_status = TaskStatus::Ready;
         }
-        let task_infos = [TaskInfo {
-            status: TaskStatus::Ready,
-            syscall_times: [0; MAX_SYSCALL_NUM],
-            time: 0,
-        }; MAX_APP_NUM];
         TaskManager {
             num_app,
             inner: unsafe {
                 UPSafeCell::new(TaskManagerInner {
                     tasks,
-                    task_infos,
                     current_task: 0,
                 })
             },
@@ -151,12 +145,12 @@ impl TaskManager {
     fn increase_syscall(&self, syscall_id: usize) {
         let mut inner = self.inner.exclusive_access();
         let current = inner.current_task;
-        inner.task_infos[current].syscall_times[syscall_id] += 1;
+        inner.tasks[current].task_infos.syscall_times[syscall_id] += 1;
     }
     fn current_task_info(&self) ->TaskInfo {
         let inner = self.inner.exclusive_access();
         let current = inner.current_task;
-        let ti = inner.task_infos[current].clone();
+        let ti = inner.tasks[current].task_infos.clone();
         ti
     }
 

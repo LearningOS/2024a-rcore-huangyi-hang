@@ -26,6 +26,18 @@ pub struct TaskInfo {
     pub time: usize,
 }
 
+impl TaskInfo {
+    /// new
+    pub fn new() -> TaskInfo {
+        TaskInfo {
+            status: TaskStatus::UnInit,
+            syscall_times: [0; MAX_SYSCALL_NUM],
+            time: 0,
+        }
+        
+    }
+}
+
 /// task exits and submit an exit code
 pub fn sys_exit(exit_code: i32) -> ! {
     trace!("[kernel] Application exited with code {}", exit_code);
@@ -58,6 +70,7 @@ pub fn sys_task_info(ti: *mut TaskInfo) -> isize {
     unsafe {
         *ti = task::current_task_info();
         (*ti).status = TaskStatus::Running;
+        // buggy
         (*ti).time = get_time_ms(); 
     }
     0

@@ -77,3 +77,44 @@ trap_handler:
 ## set timer trigger to 10 ms: set_timer(get_time() + CLOCK_FREQ / TICKS_PER_SEC);
 CLOCK_FREQ: ticks per seconds/1000 ms
 divided by 100, which is ticks per 10ms
+# 10.13
+## process of run_first_app
+context initialization
+switch 
+## Problems
+1.抢占式与协作式调度的区别？
+前者主动用yield，后者被动被timer中断
+2. 
+异：发起方式不同，异步，非法，ecall
+同：都会陷入内核处理
+3. 
+4. 
+看scause
+5. 
+6.
+如果不支持，则无法响应来自内核的需求
+如果支持，要防止递归中断嵌套，
+11.
+trap上下文涉及内核态的切换，故需要保存全部
+## structure of task_manager
+pub struct TaskManager {
+    /// total number of tasks
+    num_app: usize,
+    /// use inner value to get mutable access
+    inner: UPSafeCell<TaskManagerInner>,
+}
+pub struct TaskManagerInner {
+    /// task list
+    tasks: [TaskControlBlock; MAX_APP_NUM],
+    /// id of current `Running` task
+    current_task: usize,
+}
+pub struct TaskControlBlock {
+    /// The task status in it's lifecycle
+    pub task_status: TaskStatus,
+    /// task infos
+    pub task_infos: TaskInfo,
+    /// The task context
+    pub task_cx: TaskContext,
+}
+## 10.14
