@@ -22,7 +22,7 @@ pub struct TaskInfo {
     pub status: TaskStatus,
     /// The numbers of syscall called by task
     pub syscall_times: [u32; MAX_SYSCALL_NUM],
-    /// Total running time of task
+    /// Total running time of task in ms
     pub time: usize,
 }
 
@@ -70,8 +70,7 @@ pub fn sys_task_info(ti: *mut TaskInfo) -> isize {
     unsafe {
         *ti = task::current_task_info();
         (*ti).status = TaskStatus::Running;
-        // buggy
-        (*ti).time = get_time_ms(); 
+        (*ti).time = get_time_ms();
     }
     0
 }
