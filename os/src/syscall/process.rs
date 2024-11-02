@@ -2,11 +2,12 @@
 use core::ptr;
 
 use crate::{
-    config::MAX_SYSCALL_NUM, mm::translated_byte_buffer, task::{
-        change_program_brk, current_user_token, exit_current_and_run_next, suspend_current_and_run_next, TaskStatus
+    config::{MAX_SYSCALL_NUM, PAGE_SIZE}, mm::{translated_byte_buffer, MapPermission, VirtAddr}, task::{
+        change_program_brk, current_user_token, exit_current_and_run_next, map_new_area, suspend_current_and_run_next, unmap_old_area, vpn_to_pte, TaskStatus
     }, timer::get_time_us
 };
 use crate::task::get_taskinfo;
+use crate::mm::VPNRange;
 
 #[repr(C)]
 #[derive(Debug)]
@@ -115,16 +116,35 @@ pub fn sys_task_info(ti: *mut TaskInfo) -> isize {
 
 // YOUR JOB: Implement mmap.
 ///
-pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
-    trace!("kernel: sys_mmap NOT IMPLEMENTED YET!");
-    -1
+pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
+    const PROT_MASK:usize = 0x7;
+    if start % PAGE_SIZE != 0 
+        || port & !PROT_MASK != 0 
+        || port & PROT_MASK == 0 {
+        return -1;
+    }
+    let start_vpn = VirtAddr::from(start).floor();
+    let end_vpn = VirtAddr::from(start + len).ceil();
+    let vpns = VPNRange::new(start_vpn, end_vpn);
+    for vpn in vpns {
+        if let Some(pte) = vpn_to_pte(vpn) {
+            if pte.is_valid() {
+                return -1;
+            }
+        }
+    }
+    // port << 1, because first valid bit of MapPermission is 1th, not 0th
+    map_new_area(start_vpn.into(), end_vpn.into(), MapPermission::from_bits_truncate((port << 1) as u8 ) | MapPermission::U);
+    0
 }
 
 // YOUR JOB: Implement munmap.
 ///
-pub fn sys_munmap(_start: usize, _len: usize) -> isize {
-    trace!("kernel: sys_munmap NOT IMPLEMENTED YET!");
-    -1
+pub fn sys_munmap(start: usize, len: usize) -> isize {
+    if start % PAGE_SIZE != 0 {
+        return -1;
+    }
+    unmap_old_area(start, len)
 }
 /// change data segment size
 pub fn sys_sbrk(size: i32) -> isize {

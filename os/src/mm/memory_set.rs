@@ -262,6 +262,12 @@ impl MemorySet {
             false
         }
     }
+
+
+    ///
+    pub fn unmap_vpn(&mut self, vpn: VirtPageNum) {
+        self.page_table.unmap(vpn);
+    }
 }
 /// map area structure, controls a contiguous piece of virtual memory
 pub struct MapArea {
@@ -378,6 +384,7 @@ bitflags! {
         const U = 1 << 4;
     }
 }
+
 
 /// Return (bottom, top) of a kernel stack in kernel space.
 pub fn kernel_stack_position(app_id: usize) -> (usize, usize) {

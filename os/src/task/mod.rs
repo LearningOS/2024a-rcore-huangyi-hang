@@ -15,6 +15,7 @@ mod switch;
 mod task;
 
 use crate::loader::{get_app_data, get_num_app};
+use crate::mm::{MapPermission, PageTableEntry, VirtPageNum, VirtAddr};
 use crate::sync::UPSafeCell;
 use crate::syscall::process::TaskInfo;
 use crate::timer::get_time_ms;
@@ -23,6 +24,7 @@ use alloc::vec::Vec;
 use lazy_static::*;
 use switch::__switch;
 pub use task::{TaskControlBlock, TaskStatus};
+use crate::mm::VPNRange;
 
 pub use context::TaskContext;
 /// The task manager, where all the tasks are managed.
@@ -180,8 +182,6 @@ impl TaskManager {
         ti.change_time(get_time_ms() - inner.tasks[current].start_time);
         ti
     }
-
-
 }
 
 
@@ -241,4 +241,37 @@ pub fn increase_syscall(id: usize) {
 /// return taskinfo
 pub fn get_taskinfo() -> TaskInfo {
     TASK_MANAGER.get_taskinfo()
+}
+
+///
+pub fn vpn_to_pte(vpn: VirtPageNum) -> Option<PageTableEntry> {
+    let inner = TASK_MANAGER.inner.exclusive_access();
+    let current = inner.current_task;
+    inner.tasks[current].memory_set.translate(vpn)
+}
+///
+pub fn map_new_area(start_va: VirtAddr, end_va: VirtAddr, perm: MapPermission) {
+    let mut inner = TASK_MANAGER.inner.exclusive_access();
+    let current = inner.current_task;
+    inner.tasks[current].memory_set.insert_framed_area(start_va, end_va, perm);
+}
+
+///
+pub fn unmap_old_area(start: usize, len: usize) -> isize {
+    let mut inner = TASK_MANAGER.inner.exclusive_access();
+    let current = inner.current_task;
+    let start_vpn = VirtAddr::from(start).floor();
+    let end_vpn = VirtAddr::from(start + len).ceil();
+    let vpns = VPNRange::new(start_vpn, end_vpn);
+    for vpn in vpns {
+        if let Some(pte) = inner.tasks[current].memory_set.translate(vpn) {
+            if !pte.is_valid() {
+                return -1;
+            }
+            inner.tasks[current].memory_set.unmap_vpn(vpn);
+        } else {
+            return -1;
+        }
+    }
+    0
 }
