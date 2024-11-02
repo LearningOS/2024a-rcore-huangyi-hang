@@ -16,6 +16,8 @@ mod task;
 
 use crate::loader::{get_app_data, get_num_app};
 use crate::sync::UPSafeCell;
+use crate::syscall::process::TaskInfo;
+use crate::timer::get_time_ms;
 use crate::trap::TrapContext;
 use alloc::vec::Vec;
 use lazy_static::*;
@@ -23,7 +25,6 @@ use switch::__switch;
 pub use task::{TaskControlBlock, TaskStatus};
 
 pub use context::TaskContext;
-
 /// The task manager, where all the tasks are managed.
 ///
 /// Functions implemented on `TaskManager` deals with all task state transitions
@@ -44,8 +45,12 @@ pub struct TaskManager {
 struct TaskManagerInner {
     /// task list
     tasks: Vec<TaskControlBlock>,
+
     /// id of current `Running` task
     current_task: usize,
+
+    /// 
+    tasks_info: Vec<TaskInfo>,
 }
 
 lazy_static! {
@@ -55,8 +60,10 @@ lazy_static! {
         let num_app = get_num_app();
         println!("num_app = {}", num_app);
         let mut tasks: Vec<TaskControlBlock> = Vec::new();
+        let mut tasks_info: Vec<TaskInfo> = Vec::new();
         for i in 0..num_app {
             tasks.push(TaskControlBlock::new(get_app_data(i), i));
+            tasks_info.push(TaskInfo::new());
         }
         TaskManager {
             num_app,
@@ -64,6 +71,7 @@ lazy_static! {
                 UPSafeCell::new(TaskManagerInner {
                     tasks,
                     current_task: 0,
+                    tasks_info,
                 })
             },
         }
@@ -80,6 +88,7 @@ impl TaskManager {
         let next_task = &mut inner.tasks[0];
         next_task.task_status = TaskStatus::Running;
         let next_task_cx_ptr = &next_task.task_cx as *const TaskContext;
+        next_task.start_time = get_time_ms();
         drop(inner);
         let mut _unused = TaskContext::zero_init();
         // before this, we should drop local variables that must be dropped manually
@@ -143,6 +152,9 @@ impl TaskManager {
             inner.current_task = next;
             let current_task_cx_ptr = &mut inner.tasks[current].task_cx as *mut TaskContext;
             let next_task_cx_ptr = &inner.tasks[next].task_cx as *const TaskContext;
+            if inner.tasks[next].start_time == 0 {
+                inner.tasks[next].start_time = get_time_ms();
+            }
             drop(inner);
             // before this, we should drop local variables that must be dropped manually
             unsafe {
@@ -153,7 +165,25 @@ impl TaskManager {
             panic!("All applications completed!");
         }
     }
+
+    fn increase_syscall(&self, id: usize) {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks_info[current].increase_syscall(id);
+    }
+
+    fn get_taskinfo(&self) -> TaskInfo {
+        let inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        let mut ti = inner.tasks_info[current];
+        ti.change_status(inner.tasks[current].get_status());
+        ti.change_time(get_time_ms() - inner.tasks[current].start_time);
+        ti
+    }
+
+
 }
+
 
 /// Run the first task in task list.
 pub fn run_first_task() {
@@ -201,4 +231,14 @@ pub fn current_trap_cx() -> &'static mut TrapContext {
 /// Change the current 'Running' task's program break
 pub fn change_program_brk(size: i32) -> Option<usize> {
     TASK_MANAGER.change_current_program_brk(size)
+}
+
+/// Increase syscall by id
+pub fn increase_syscall(id: usize) {
+    TASK_MANAGER.increase_syscall(id);
+}
+
+/// return taskinfo
+pub fn get_taskinfo() -> TaskInfo {
+    TASK_MANAGER.get_taskinfo()
 }

@@ -1,0 +1,159 @@
+# 10.7 learn lab1  lab1
+implement lab1 by hands according the tutorial
+# 10.8 start 2024a-rcore lab2
+## in console.rs, do not init the Stdout, but it work, why?
+In your implementation of the Stdout struct, you don't need to initialize an instance of Stdout before using it in the print function because you’re effectively using a temporary instance. Here's how it works:
+Explanation:
+
+    Temporary Instance: In the print function, you create a new instance of Stdout when you call Stdout.write_fmt(args). Rust allows you to use structs in this way without explicitly instantiating them first because the instance is created on the stack and dropped immediately after the call.
+
+    No State Management: Since Stdout doesn't maintain any internal state (i.e., it doesn't have fields), you can use it without initializing it. Each call to print creates a new Stdout instance, writes to it, and then it's dropped.
+Alternative:
+
+If you wanted to maintain some state within Stdout (like configuration or buffering), you would need to create a proper instance and manage its lifecycle. But in this case, since it only serves to output characters, creating a temporary instance is sufficient and idiomatic in Rust.
+
+So your code works as intended without requiring explicit initialization of Stdout.
+## https://docs.rs/log/latest/log/trait.Log.html
+
+# 10.9 lab2
+## show commands in sub dir to trace when use -nB option in parent dir?
+use $(MAKE) not just make
+The reason $(MAKE) works but make does not in a subdirectory call relates to how GNU Make handles recursive invocations. Here’s a breakdown of the differences:
+1. Recursive Make Behavior
+
+    $(MAKE): This variable automatically expands to the current make command that is being executed, including all its flags. It’s specifically designed to be used in recursive make calls. This ensures that any flags you provide (like -nB) are passed correctly to the sub-make process.
+
+    make: When you directly call make, it does not inherit the flags or context of the original make command. As a result, if you invoke make in a subdirectory without $(MAKE), it will run the default make command without any of the current flags or environment settings.
+
+2. Passing Flags
+
+When you use $(MAKE), it carries over the flags you’ve passed to the top-level make command (like -nB), ensuring that:
+
+    If you run make -nB, the -nB flags are passed down to the sub-make invocation correctly when you use $(MAKE).
+
+## does base_address = 0x80400000 in build.py and BASE_ADDRESS = 0x0 conflict?
+## sscratch in trap.S line 51
+## recompile all crates every time build the project
+# 10.10 lab2
+## when does the global variable APP_MANAGE be initialized and how to debug it?
+first time using it, in this example, batch::print_app_info
+## at the end of __restore, after addi the sp, print sp in gdb, it will show USER_STACK?
+it not wrong, sp actually points to the top  of kernel stack, which is the bottom of user stack coincidentlly, and in gdb it is the start of user stack
+## when trap the cpu  modified sepc, scause, stval, no sscratch
+## process of context switch 
+sp->boot stack
+run_next_app:   
+    + create a cx on boot stack
+    + push it to kernel stack
+    + __restore
+        + first, sp->boot stack, a0->cx on kernel stack, sscratch->0
+        + mv a0 to sp, write sp from cx to sscratch, so sp->cx on kernel stack, sscratch->user stack
+        + addi sp to release cx on kernel stack, now sp-> kernel stack, sscratch->user stack
+        + swap sp and sscratch, now sp->user stack, sscratch->kernel stack
+        + sret to sepc
+user app:
+    + user code
+    + trap
+    + __alltraps
+        + sp->somewhere user stack, sscratch->kernel stack
+        + swap sp and sscratch, sp->kernel stack, sscratch->somewhere user stack
+        + addi sp, sp -272 to alloc space to save cx, sp->cx in kernel stack, sscratch->somewhere user stack
+        + save sscratch to sp of ctx, now sp of ctx is user kernel addr before trap
+        + mv sp to a0
+        + call trap_handler
+
+trap_handler:
+    + a0 contain the ctx
+# 10.11
+## about compileing the user program
+1. the -Ttext option will override the value of linker.ld and the order of sections ordered by linker.ld remaind 
+# 10.12  lab3
+## compare with lab2
+    1. same
+        packged with os and load to memory
+    2. difference
+        + lab2 user code is be load to 0x80400000
+        + lab3 user code is be load to pa start at 0x8040000, one by one
+## set timer trigger to 10 ms: set_timer(get_time() + CLOCK_FREQ / TICKS_PER_SEC);
+CLOCK_FREQ: ticks per seconds/1000 ms
+divided by 100, which is ticks per 10ms
+# 10.13
+## process of run_first_app
+context initialization
+switch 
+## Problems
+1.抢占式与协作式调度的区别？
+前者主动用yield，后者被动被timer中断
+2. 
+异：发起方式不同，异步，非法，ecall
+同：都会陷入内核处理
+3. 
+4. 
+看scause
+5. 
+6.
+如果不支持，则无法响应来自内核的需求
+如果支持，要防止递归中断嵌套，
+11.
+trap上下文涉及内核态的切换，故需要保存全部
+## structure of task_manager
+pub struct TaskManager {
+    /// total number of tasks
+    num_app: usize,
+    /// use inner value to get mutable access
+    inner: UPSafeCell<TaskManagerInner>,
+}
+pub struct TaskManagerInner {
+    /// task list
+    tasks: [TaskControlBlock; MAX_APP_NUM],
+    /// id of current `Running` task
+    current_task: usize,
+}
+pub struct TaskControlBlock {
+    /// The task status in it's lifecycle
+    pub task_status: TaskStatus,
+    /// task infos
+    pub task_infos: TaskInfo,
+    /// The task context
+    pub task_cx: TaskContext,
+}
+# 10.14  
+why can not use kernel time + user time
+# 10.15
+## Memory Address on RISC-V
+1. [satp](https://riscv.org/wp-content/uploads/2017/05/riscv-privileged-v1.10.pdf)
+## 不仅要更新物理页号，还要将标志位 V 置 1，不然硬件在查多级页表的时候，会认为这个页表项不合法，从而触发 Page Fault 而不能向下走。
+## 多级页表的遍历是由代码完成的，而页表项的解析和虚拟地址的转换是由硬件完成的, how to understand?
+## 创建应用地址空间的时候，为什么先映射trampoline 
+# 10.18
+## ??? of lab
+dynamic memory allocing
+alloc crate, heap
+vitual memory
+    + PA, VA, PPN, VPN, FLAGS, PTE
+![sv39](./images/sv39.png)
+# 10.21
+who write value to sscratch?
+
+# 10.24
+## translated_byte_buffer
+1. if do not cross page, [start_addr_vpn   start   end  end_va], copy from start_va to end
+2. if yes, [start_addr_vpn start1   end_va1|start2          end], copy from [start1, end_va1] then [start2, end]
+
+# Virtual Address Tutorial
+1. phsical address is unsafe and tedious to use for user and os, 
+# 11.1 Restart 
+## heap and frame
+before, I am confused with heap and frame, does they have conflict in memory?
+until today, why do not I do before?
+use gdb to print out all address
+HEAP_SPACE: 0x80273000, 0x82273000
+rust_main: 0x80205426
+ekernel: 0x82274000
+[0x80200000        rust_main         HEAP_SPACE        ekernel  FRAME]
+## order of making mapping, put code to physical address?
+how to create mapping without physical address? silly
+## proces of make run TEST=1
+it is too slow, 
+## how to use struct in another module?
+pub the struct, put mod module, mod in main

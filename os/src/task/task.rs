@@ -5,7 +5,6 @@ use crate::mm::{
     kernel_stack_position, MapPermission, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE,
 };
 use crate::trap::{trap_handler, TrapContext};
-
 /// The task control block (TCB) of a task.
 pub struct TaskControlBlock {
     /// Save task context
@@ -28,6 +27,9 @@ pub struct TaskControlBlock {
 
     /// Program break
     pub program_brk: usize,
+
+    /// start time of this task
+    pub start_time: usize,
 }
 
 impl TaskControlBlock {
@@ -63,6 +65,7 @@ impl TaskControlBlock {
             base_size: user_sp,
             heap_bottom: user_sp,
             program_brk: user_sp,
+            start_time: 0,
         };
         // prepare TrapContext in user space
         let trap_cx = task_control_block.get_trap_cx();
@@ -96,6 +99,12 @@ impl TaskControlBlock {
             None
         }
     }
+    
+    ///
+    pub fn get_status(&self) -> TaskStatus {
+        self.task_status
+    }
+
 }
 
 #[derive(Copy, Clone, PartialEq)]
